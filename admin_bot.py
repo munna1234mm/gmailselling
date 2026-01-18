@@ -142,7 +142,8 @@ async def broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await user_bot.send_message(uid, f"📢 *Announcement*\n\n{text}", parse_mode="Markdown")
             count += 1
-        except Exception:
+        except Exception as e:
+            logging.error(f"Failed to broadcast to {uid}: {e}")
             pass # Blocked or error
             
     await status_msg.edit_text(f"✅ Broadcast sent to {count} users.")
