@@ -294,7 +294,8 @@ async def create_withdrawal(user_id, amount, method, details):
         async with db.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,)) as cursor:
             row = await cursor.fetchone()
             if not row or row[0] < amount:
-                return False, "Insufficient balance."
+                balance = row[0] if row else 0.0
+                return False, f"Insufficient balance. You have ${balance:.2f}, but requested ${amount:.2f}."
         
         # Deduct balance
         await db.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", (amount, user_id))
