@@ -16,45 +16,53 @@ ENTER_PAYMENT_VALUE = 2
 WITHDRAW_AMOUNT = 3
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    args = context.args
-    referrer_id = None
-    
-    if args and args[0].isdigit():
-        referrer_id = int(args[0])
-        if referrer_id == user.id:
-            referrer_id = None
-            
-    is_new = await db.add_user(user.id, user.full_name, referrer_id)
-    
-    if is_new:
-        # Notify Admins
-        admins = await db.get_admins()
-        if admins:
-            admin_bot = Bot(token=ADMIN_BOT_TOKEN)
-            for admin_id in admins:
-                try:
-                    await admin_bot.send_message(admin_id, f"👤 *New Member Joined*\nName: {user.full_name}\nID: `{user.id}`", parse_mode="Markdown")
-                except Exception as e:
-                    logging.error(f"Failed to notify admin {admin_id}: {e}")
+    try:
+        logging.info(f"Start command received from user {update.effective_user.id}")
+        user = update.effective_user
+        args = context.args
+        referrer_id = None
+        
+        if args and args[0].isdigit():
+            referrer_id = int(args[0])
+            if referrer_id == user.id:
+                referrer_id = None
+                
+        is_new = await db.add_user(user.id, user.full_name, referrer_id)
+        
+        if is_new:
+            # Notify Admins
+            admins = await db.get_admins()
+            if admins:
+                admin_bot = Bot(token=ADMIN_BOT_TOKEN)
+                for admin_id in admins:
+                    try:
+                        await admin_bot.send_message(admin_id, f"👤 *New Member Joined*\nName: {user.full_name}\nID: `{user.id}`", parse_mode="Markdown")
+                    except Exception as e:
+                        logging.error(f"Failed to notify admin {admin_id}: {e}")
 
-    keyboard = [
-        ["➕ Register a new account", "📋 My accounts"],
-        ["💰 Balance", "👥 My referrals"],
-        ["⚙️ Settings", "💬 Help"]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-    await update.message.reply_text(
-        f"👋 Hello {user.first_name}!\n"
-        "Welcome to the Gmail Selling Bot.\n"
-        "Select an option below to get started.",
-        reply_markup=reply_markup
-    )
+        keyboard = [
+            ["➕ Register a new account", "📋 My accounts"],
+            ["💰 Balance", "👥 My referrals"],
+            ["⚙️ Settings", "💬 Help"]
+        ]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        
+        await update.message.reply_text(
+            f"👋 Hello {user.first_name}!\n"
+            "Welcome to the Gmail Selling Bot.\n"
+            "Select an option below to get started.",
+            reply_markup=reply_markup
+        )
+        logging.info(f"Start reply sent to {user.id}")
+    except Exception as e:
+        logging.error(f"Error in start command: {e}", exc_info=True)
+        await update.message.reply_text("An error occurred. Please try again later.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    user_id = update.effective_user.id
+    try:
+        text = update.message.text
+        user_id = update.effective_user.id
+        logging.info(f"Message received from {user_id}: {text}")
     
     if text == "➕ Register a new account":
         await register_account(update, context)
@@ -103,6 +111,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif text == "⚙️ Settings":
         await settings_menu(update, context)
+
+    except Exception as e:
+        logging.error(f"Error in handle_message: {e}", exc_info=True)
+        await update.message.reply_text("An error occurred processing your request.")
 
 # --- Withdraw Flow ---
 async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -352,6 +364,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Action cancelled.")
     return ConversationHandler.END
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logging.error(msg="Exception while handling an update:", exc_info=context.error)
+    if isinstance(update, Update) and update.effective_message:
+        try:
+            await update.effective_message.reply_text("An internal error occurred. Admin has been notified.")
+        except:
+             pass # If we can't reply, simple log is enough
 
 def get_user_handler():
     cancel_handler = CommandHandler("cancel", cancel)

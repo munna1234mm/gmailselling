@@ -93,21 +93,31 @@ async def get_all_users():
 
 # User Operations
 async def add_user(user_id, username, referrer_id=None):
-    async with aiosqlite.connect(DB_NAME) as db:
-        # Check if user exists
-        async with db.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,)) as cursor:
-            if await cursor.fetchone():
-                return False # Already exists
-        
-        await db.execute("INSERT OR IGNORE INTO users (user_id, username, referred_by, hold_balance, payment_info) VALUES (?, ?, ?, 0.0, '{}')", (user_id, username, referrer_id))
-        await db.commit()
-        return True # New user
+    try:
+        async with aiosqlite.connect(DB_NAME) as db:
+            # Check if user exists
+            async with db.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,)) as cursor:
+                if await cursor.fetchone():
+                    return False # Already exists
+            
+            await db.execute("INSERT OR IGNORE INTO users (user_id, username, referred_by, hold_balance, payment_info) VALUES (?, ?, ?, 0.0, '{}')", (user_id, username, referrer_id))
+            await db.commit()
+            return True # New user
+    except Exception as e:
+        import logging
+        logging.error(f"Error in add_user: {e}", exc_info=True)
+        return False
 
 async def get_user_balance(user_id):
-    async with aiosqlite.connect(DB_NAME) as db:
-        async with db.execute("SELECT balance, hold_balance FROM users WHERE user_id = ?", (user_id,)) as cursor:
-            row = await cursor.fetchone()
-            return (row[0], row[1]) if row else (0.0, 0.0)
+    try:
+        async with aiosqlite.connect(DB_NAME) as db:
+            async with db.execute("SELECT balance, hold_balance FROM users WHERE user_id = ?", (user_id,)) as cursor:
+                row = await cursor.fetchone()
+                return (row[0], row[1]) if row else (0.0, 0.0)
+    except Exception as e:
+        import logging
+        logging.error(f"Error in get_user_balance: {e}", exc_info=True)
+        return (0.0, 0.0)
 
 async def add_balance(user_id, amount):
     # This adds to MAIN balance

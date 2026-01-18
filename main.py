@@ -43,6 +43,7 @@ async def main():
     # Add Handlers
     admin_app.add_handlers(admin_bot.get_admin_handler())
     user_app.add_handlers(user_bot.get_user_handler())
+    user_app.add_error_handler(user_bot.error_handler)
 
     # Run both apps
     async with admin_app:
