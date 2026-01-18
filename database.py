@@ -35,6 +35,13 @@ async def init_db():
         await db.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('price_per_account', '0.20')")
 
 
+        # Check if accounts table has name columns
+        try:
+            await db.execute("ALTER TABLE accounts ADD COLUMN first_name TEXT")
+            await db.execute("ALTER TABLE accounts ADD COLUMN last_name TEXT")
+        except:
+            pass
+
         # Check if users table has referred_by column (migration hack)
         try:
             await db.execute("ALTER TABLE users ADD COLUMN referred_by INTEGER")
@@ -147,10 +154,10 @@ async def get_referral_stats(user_id):
             return row[0] if row else 0
 
 # Account Operations
-async def add_account(email, password):
+async def add_account(email, password, first_name="Any", last_name="Any"):
     try:
         async with aiosqlite.connect(DB_NAME) as db:
-            await db.execute("INSERT INTO accounts (email, password) VALUES (?, ?)", (email, password))
+            await db.execute("INSERT INTO accounts (email, password, first_name, last_name) VALUES (?, ?, ?, ?)", (email, password, first_name, last_name))
             await db.commit()
         return True
     except aiosqlite.IntegrityError:
@@ -159,19 +166,19 @@ async def add_account(email, password):
 async def get_available_account(user_id):
     async with aiosqlite.connect(DB_NAME) as db:
         # Check if user already has a pending account
-        async with db.execute("SELECT id, email, password FROM accounts WHERE assigned_to = ? AND status = 'pending'", (user_id,)) as cursor:
+        async with db.execute("SELECT id, email, password, first_name, last_name FROM accounts WHERE assigned_to = ? AND status = 'pending'", (user_id,)) as cursor:
             existing = await cursor.fetchone()
             if existing:
                 return existing
 
         # Get a new available account
-        async with db.execute("SELECT id, email, password FROM accounts WHERE status = 'available' LIMIT 1") as cursor:
+        async with db.execute("SELECT id, email, password, first_name, last_name FROM accounts WHERE status = 'available' LIMIT 1") as cursor:
             row = await cursor.fetchone()
             if row:
-                account_id, email, password = row
+                account_id, email, password, first, last = row
                 await db.execute("UPDATE accounts SET status = 'pending', assigned_to = ? WHERE id = ?", (user_id, account_id))
                 await db.commit()
-                return (account_id, email, password)
+                return (account_id, email, password, first, last)
             return None
 
 async def cancel_registration(user_id):
@@ -182,12 +189,12 @@ async def cancel_registration(user_id):
 async def mark_account_submitted(user_id):
     # Changed from 'done' to 'submitted'
     async with aiosqlite.connect(DB_NAME) as db:
-        async with db.execute("SELECT id, email, password FROM accounts WHERE assigned_to = ? AND status = 'pending'", (user_id,)) as cursor:
+        async with db.execute("SELECT id, email, password, first_name, last_name FROM accounts WHERE assigned_to = ? AND status = 'pending'", (user_id,)) as cursor:
             row = await cursor.fetchone()
             if not row:
-                return False, "No pending registration found.", None
+                return False, "No pending registration found. Please try registering again.", None
             
-            account_id, email, password = row
+            account_id, email, password, first, last = row
             
             # Get current price
             async with db.execute("SELECT value FROM settings WHERE key = 'price_per_account'") as cursor:
@@ -199,7 +206,7 @@ async def mark_account_submitted(user_id):
             
             await db.execute("UPDATE users SET hold_balance = hold_balance + ? WHERE user_id = ?", (price, user_id))
             await db.commit()
-            return True, price, (account_id, email, password)
+            return True, price, (account_id, email, password, first, last)
 
 async def get_pending_approvals():
     async with aiosqlite.connect(DB_NAME) as db:
@@ -327,6 +334,23 @@ async def get_recovery_email():
         async with db.execute("SELECT value FROM settings WHERE key = 'recovery_email'") as cursor:
             row = await cursor.fetchone()
             return str(row[0]) if row else "None"
+
+async def set_names(first, last):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('first_name', ?)", (str(first),))
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('last_name', ?)", (str(last),))
+        await db.commit()
+
+async def get_names():
+    async with aiosqlite.connect(DB_NAME) as db:
+        async with db.execute("SELECT value FROM settings WHERE key = 'first_name'") as c1:
+            r1 = await c1.fetchone()
+        async with db.execute("SELECT value FROM settings WHERE key = 'last_name'") as c2:
+            r2 = await c2.fetchone()
+            
+        first = str(r1[0]) if r1 else "Any"
+        last = str(r2[0]) if r2 else "Any"
+        return first, last
 
 async def get_stats():
     async with aiosqlite.connect(DB_NAME) as db:

@@ -18,6 +18,7 @@ BROADCAST_MSG = 4
 DM_USER_ID = 5
 DM_MSG = 6
 SETTING_RECOVERY = 7
+SETTING_NAMES = 8
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -29,7 +30,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("⏳ Pending Approvals", callback_data="approvals")],
         [InlineKeyboardButton("💰 Pending Withdrawals", callback_data="withdrawals")], 
         [InlineKeyboardButton("💵 Set Price", callback_data="set_price"), InlineKeyboardButton("🎁 Set Ref Bonus", callback_data="set_ref_bonus")],
-        [InlineKeyboardButton("📧 Set Recovery Email", callback_data="set_recovery")], # NEW
+        [InlineKeyboardButton("📧 Set Recovery Email", callback_data="set_recovery"), InlineKeyboardButton("📝 Set Names", callback_data="set_names")], 
         [InlineKeyboardButton("📢 Broadcast", callback_data="broadcast"), InlineKeyboardButton("✉️ DM User", callback_data="dm_user")], 
         [InlineKeyboardButton("📊 Statistics", callback_data="stats")]
     ]
@@ -53,6 +54,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     price = await db.get_price()
     ref_bonus = await db.get_referral_bonus()
     recovery = await db.get_recovery_email()
+    first, last = await db.get_names()
     
     text = (
         f"📊 *Statistics*\n\n"
@@ -61,7 +63,8 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👥 Total Users: {users}\n"
         f"💵 Current Price: ${price}\n"
         f"🎁 Referral Bonus: ${ref_bonus}\n"
-        f"📧 Recovery Email: `{recovery}`"
+        f"📧 Recovery Email: `{recovery}`\n"
+        f"📝 Names: `{first} {last}`"
     )
     
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_home")]]
@@ -70,6 +73,33 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
 
 async def back_home(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await start(update, context)
+    return ConversationHandler.END
+
+# --- Names Flow ---
+async def names_start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    first, last = await db.get_names()
+    await query.edit_message_text(
+        f"Current: First=`{first}`, Last=`{last}`\n\n"
+        "Send new names in format: `Firstname Lastname`\n"
+        "Example: `John Smith`\n"
+        "Type `Any Any` to reset.",
+        parse_mode="Markdown"
+    )
+    return SETTING_NAMES
+
+async def set_names_val(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    parts = text.split(maxsplit=1)
+    if len(parts) < 2:
+        await update.message.reply_text("❌ Invalid format. Use `Firstname Lastname` (space separated).")
+        return SETTING_NAMES
+        
+    first, last = parts
+    await db.set_names(first, last)
+    await update.message.reply_text(f"✅ Names updated to: First=`{first}`, Last=`{last}`", parse_mode="Markdown")
     await start(update, context)
     return ConversationHandler.END
 
@@ -272,6 +302,7 @@ async def add_start_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
     await query.edit_message_text(
         "Send me the accounts in `email:password` format.\n"
+        "Or `email:password:firstname:lastname` to assign specific names.\n"
         "You can send a list or a file.\n\n"
         "Send /cancel to cancel.",
         parse_mode="Markdown"
@@ -286,11 +317,17 @@ async def add_accounts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines = text.split('\n')
     for line in lines:
         if ':' in line:
-            email, password = line.strip().split(':', 1)
-            if await db.add_account(email.strip(), password.strip()):
-                count += 1
-            else:
-                failed += 1
+            parts = line.strip().split(':')
+            if len(parts) >= 2:
+                email = parts[0].strip()
+                password = parts[1].strip()
+                first = parts[2].strip() if len(parts) > 2 else "Any"
+                last = parts[3].strip() if len(parts) > 3 else "Any"
+                
+                if await db.add_account(email, password, first, last):
+                    count += 1
+                else:
+                    failed += 1
     
     await update.message.reply_text(f"✅ Added {count} accounts.\n❌ Failed/Duplicate: {failed}")
     await start(update, context)
@@ -307,11 +344,17 @@ async def add_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines = text.split('\n')
     for line in lines:
         if ':' in line:
-            email, password = line.strip().split(':', 1)
-            if await db.add_account(email.strip(), password.strip()):
-                count += 1
-            else:
-                failed += 1
+            parts = line.strip().split(':')
+            if len(parts) >= 2:
+                email = parts[0].strip()
+                password = parts[1].strip()
+                first = parts[2].strip() if len(parts) > 2 else "Any"
+                last = parts[3].strip() if len(parts) > 3 else "Any"
+                
+                if await db.add_account(email, password, first, last):
+                    count += 1
+                else:
+                    failed += 1
                 
     await update.message.reply_text(f"✅ (File) Added {count} accounts.\n❌ Failed/Duplicate: {failed}")
     await start(update, context)
@@ -406,6 +449,14 @@ def get_admin_handler():
         fallbacks=[cancel_handler, start_handler]
     )
     
+    conv_names = ConversationHandler(
+        entry_points=[CallbackQueryHandler(names_start_callback, pattern="^set_names$")],
+        states={
+            SETTING_NAMES: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_names_val)]
+        },
+        fallbacks=[cancel_handler, start_handler]
+    )
+    
     conv_broad = ConversationHandler(
         entry_points=[CallbackQueryHandler(broadcast_start, pattern="^broadcast$")],
         states={
@@ -429,6 +480,7 @@ def get_admin_handler():
         conv_price,
         conv_ref,
         conv_rec,
+        conv_names,
         conv_broad,
         conv_dm,
         CallbackQueryHandler(stats, pattern="^stats$"),

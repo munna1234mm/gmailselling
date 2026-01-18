@@ -267,9 +267,11 @@ async def register_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ No accounts available. Please try again later.")
         return
 
-    acc_id, email, password = account
+    acc_id, email, password, first, last = account
     price = await db.get_price()
     recovery = await db.get_recovery_email()
+    # first, last = await db.get_names() # Removed global names
+
     
     # Explicit instruction
     if recovery and recovery != "None":
@@ -282,8 +284,8 @@ async def register_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = (
         f"Register account using the specified data and get ${price}\n\n"
-        f"First name: Any\n"
-        f"Last name: Any\n"
+        f"First name: `{first}`\n"
+        f"Last name: `{last}`\n"
         f"Email: `{email}`\n"
         f"Password: `{password}`\n"
         f"{recovery_section}\n\n"
@@ -311,7 +313,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
              success, msg, acc_info = await db.mark_account_submitted(user_id)
              if success:
                 price = msg
-                account_id, email, password = acc_info
+                id_val, email, password, f, l = acc_info
                 
                 await query.edit_message_text(
                     f"✅ Account submitted for approval! You earned ${price} (Hold).\n"
