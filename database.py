@@ -12,6 +12,9 @@ async def init_db():
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
                 balance REAL DEFAULT 0.0,
+                hold_balance REAL DEFAULT 0.0,
+                payment_info TEXT DEFAULT '{}',
+                referred_by INTEGER,
                 joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -45,6 +48,16 @@ async def init_db():
         # Check if users table has referred_by column (migration hack)
         try:
             await db.execute("ALTER TABLE users ADD COLUMN referred_by INTEGER")
+        except:
+            pass
+            
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN hold_balance REAL DEFAULT 0.0")
+        except:
+            pass
+            
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN payment_info TEXT DEFAULT '{}'")
         except:
             pass
             
