@@ -42,24 +42,26 @@ async def init_db():
         try:
             await db.execute("ALTER TABLE accounts ADD COLUMN first_name TEXT")
             await db.execute("ALTER TABLE accounts ADD COLUMN last_name TEXT")
-        except:
-            pass
+        except Exception:
+            pass # Ignore if exists
 
         # Check if users table has referred_by column (migration hack)
         try:
             await db.execute("ALTER TABLE users ADD COLUMN referred_by INTEGER")
-        except:
-            pass
+        except Exception:
+             pass 
             
         try:
             await db.execute("ALTER TABLE users ADD COLUMN hold_balance REAL DEFAULT 0.0")
-        except:
-            pass
+        except Exception as e:
+            import logging
+            logging.error(f"Migration error (hold_balance): {e}")
             
         try:
             await db.execute("ALTER TABLE users ADD COLUMN payment_info TEXT DEFAULT '{}'")
-        except:
-            pass
+        except Exception as e:
+            import logging
+            logging.error(f"Migration error (payment_info): {e}")
             
         # Check if withdrawals table exists
         await db.execute("""
@@ -227,7 +229,16 @@ async def mark_account_submitted(user_id):
             # Update to submitted
             await db.execute("UPDATE accounts SET status = 'submitted' WHERE id = ?", (account_id,))
             
-            await db.execute("UPDATE users SET hold_balance = hold_balance + ? WHERE user_id = ?", (price, user_id))
+            cursor2 = await db.execute("UPDATE users SET hold_balance = hold_balance + ? WHERE user_id = ?", (price, user_id))
+            if cursor2.rowcount == 0:
+                 # User might not exist (add_user failed previously?)
+                 import logging
+                 logging.warning(f"User {user_id} not found when crediting balance. Attempting self-repair.")
+                 # Attempt to add user
+                 await db.execute("INSERT OR IGNORE INTO users (user_id, username, referred_by, hold_balance, payment_info) VALUES (?, 'Unknown', NULL, 0.0, '{}')", (user_id,))
+                 # Retry update
+                 await db.execute("UPDATE users SET hold_balance = hold_balance + ? WHERE user_id = ?", (price, user_id))
+                 
             await db.commit()
             return True, price, (account_id, email, password, first, last)
 
