@@ -47,10 +47,12 @@ async def main():
     # Run both apps
     async with admin_app:
         await admin_app.start()
+        await admin_app.bot.delete_webhook(drop_pending_updates=True) # Ensure clean slate
         await admin_app.updater.start_polling()
         
         async with user_app:
             await user_app.start()
+            await user_app.bot.delete_webhook(drop_pending_updates=True) # Ensure clean slate
             await user_app.updater.start_polling()
             
             print("✅ Bots started successfully. Press Ctrl+C to stop.")
