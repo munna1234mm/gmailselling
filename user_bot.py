@@ -63,54 +63,54 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text = update.message.text
         user_id = update.effective_user.id
         logging.info(f"Message received from {user_id}: {text}")
-    
-    if text == "➕ Register a new account":
-        await register_account(update, context)
         
-    elif text == "💰 Balance":
-        balance, hold = await db.get_user_balance(user_id)
-        keyboard = []
-        if balance > 0.0:
-            keyboard.append([InlineKeyboardButton("💸 Withdraw", callback_data="withdraw_start")])
+        if text == "➕ Register a new account":
+            await register_account(update, context)
             
-        await update.message.reply_text(
-            f"💰 *Wallet Balance*\n\n"
-            f"✅ Available: ${balance:.2f}\n"
-            f"⏳ Hold: ${hold:.2f}\n\n"
-            "Funds in 'Hold' will be moved to 'Available' after admin approval (approx. 24h).",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
-        )
-        
-    elif text == "📋 My accounts":
-        history = await db.get_user_history_list(user_id)
-        if not history:
-            await update.message.reply_text("You haven't sold any accounts yet.")
-        else:
-            msg = "📋 *My Last 10 Accounts:*\n\n"
-            for email, password, date, status in history:
-                status_icon = "✅" if status == 'sold' else "⏳" if status == 'submitted' else "❌"
-                msg += f"{status_icon} `{email}`\n"
-            await update.message.reply_text(msg, parse_mode="Markdown")
+        elif text == "💰 Balance":
+            balance, hold = await db.get_user_balance(user_id)
+            keyboard = []
+            if balance > 0.0:
+                keyboard.append([InlineKeyboardButton("💸 Withdraw", callback_data="withdraw_start")])
+                
+            await update.message.reply_text(
+                f"💰 *Wallet Balance*\n\n"
+                f"✅ Available: ${balance:.2f}\n"
+                f"⏳ Hold: ${hold:.2f}\n\n"
+                "Funds in 'Hold' will be moved to 'Available' after admin approval (approx. 24h).",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
             
-    elif text == "👥 My referrals":
-        count = await db.get_referral_stats(user_id)
-        bonus = await db.get_referral_bonus()
-        bot_username = context.bot.username
-        link = f"https://t.me/{bot_username}?start={user_id}"
-        await update.message.reply_text(
-            f"👥 *My Referrals*\n\n"
-            f"💰 *Commission per Sale:* ${bonus:.2f}\n"
-            f"👥 Total Referrals: {count}\n\n"
-            f"🔗 *Your Referral Link:*\n`{link}`",
-            parse_mode="Markdown"
-        )
-        
-    elif text == "💬 Help":
-        await update.message.reply_text("Contact @developermunna for support.")
-        
-    elif text == "⚙️ Settings":
-        await settings_menu(update, context)
+        elif text == "📋 My accounts":
+            history = await db.get_user_history_list(user_id)
+            if not history:
+                await update.message.reply_text("You haven't sold any accounts yet.")
+            else:
+                msg = "📋 *My Last 10 Accounts:*\n\n"
+                for email, password, date, status in history:
+                    status_icon = "✅" if status == 'sold' else "⏳" if status == 'submitted' else "❌"
+                    msg += f"{status_icon} `{email}`\n"
+                await update.message.reply_text(msg, parse_mode="Markdown")
+                
+        elif text == "👥 My referrals":
+            count = await db.get_referral_stats(user_id)
+            bonus = await db.get_referral_bonus()
+            bot_username = context.bot.username
+            link = f"https://t.me/{bot_username}?start={user_id}"
+            await update.message.reply_text(
+                f"👥 *My Referrals*\n\n"
+                f"💰 *Commission per Sale:* ${bonus:.2f}\n"
+                f"👥 Total Referrals: {count}\n\n"
+                f"🔗 *Your Referral Link:*\n`{link}`",
+                parse_mode="Markdown"
+            )
+            
+        elif text == "💬 Help":
+            await update.message.reply_text("Contact @developermunna for support.")
+            
+        elif text == "⚙️ Settings":
+            await settings_menu(update, context)
 
     except Exception as e:
         logging.error(f"Error in handle_message: {e}", exc_info=True)
