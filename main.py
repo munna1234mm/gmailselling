@@ -21,6 +21,10 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 async def main():
     # Initialize Database
+    # Start Keep Alive Server (For Render/Railway)
+    import keep_alive
+    keep_alive.keep_alive()
+
     await db.init_db()
     print("Database initialized.")
 
